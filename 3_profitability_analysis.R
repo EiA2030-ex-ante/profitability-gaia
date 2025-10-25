@@ -182,14 +182,16 @@ df_field <- df_resp_pr |>
   mutate(
     treatment = factor(treatment,
       levels = c("T2", "T3", "T4"),
-      labels = c("T2\n[1 t/ha]", "T3\n[2.5 t/ha]", "T4\n[7.5 t/ha]")
+      labels = c("1 t/ha", "2.5 t/ha", "7.5 t/ha")
     )
   )
 
 # ----------------------------------------------
 # 1. Boxplot of Profit by Site (facet by Crop)
 # ----------------------------------------------
-ggplot(df_field, aes(x = treatment, y = profit_y1, fill = treatment)) +
+df_field |>
+  mutate(facet_label = paste0(admin2_gadm, " | ", crop)) |>
+ggplot(aes(x = treatment, y = profit_y1, fill = treatment)) +
   geom_boxplot(
     alpha = 0.9,
     width = 0.5,
@@ -199,7 +201,7 @@ ggplot(df_field, aes(x = treatment, y = profit_y1, fill = treatment)) +
     color = "#0E3065",
     linewidth = 0.2
   ) +
-  facet_wrap(admin2_gadm ~ crop, scales = "free_y") +
+  facet_wrap( ~ facet_label, scales = "free_y") +
   scale_y_continuous(labels = dollar_format()) +
   scale_fill_manual(values = bar_colors) +
   labs(
@@ -210,7 +212,7 @@ ggplot(df_field, aes(x = treatment, y = profit_y1, fill = treatment)) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
     strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    # strip.text = element_text(color = "white",  family = my_font_2),
+    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = "none",
     plot.title = element_text(face = "plain")
@@ -222,7 +224,9 @@ ggsave(file.path(output_dir, "box_profit_by_site_crop.png"), width = 12, height 
 # ----------------------------------------------
 # 2. Boxplot of NPV by Site (facet by Crop)
 # ----------------------------------------------
-ggplot(df_field, aes(x = treatment, y = npv, fill = treatment)) +
+df_field |>
+  mutate(facet_label = paste0(admin2_gadm, " | ", crop)) |>
+ggplot(aes(x = treatment, y = npv, fill = treatment)) +
   geom_boxplot(
     alpha = 0.9,
     width = 0.5,
@@ -232,7 +236,7 @@ ggplot(df_field, aes(x = treatment, y = npv, fill = treatment)) +
     color = "#0E3065",
     linewidth = 0.2
   ) +
-  facet_wrap(admin2_gadm ~ crop, scales = "free_y") +
+  facet_wrap( ~ facet_label, scales = "free_y") +
   scale_y_continuous(labels = dollar_format()) +
   scale_fill_manual(values = bar_colors) +
   labs(
@@ -244,7 +248,7 @@ ggplot(df_field, aes(x = treatment, y = npv, fill = treatment)) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
     strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    # strip.text = element_text(color = "white",  family = my_font_2),
+    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = "none",
     plot.title = element_text(face = "plain")
@@ -309,18 +313,19 @@ sens_overall <- sensitivity_df |>
 
 #  Summarize probability of profit > 0 by crop
 sens_summary_crop <- sensitivity_df %>%
-  group_by(crop, admin2_gadm, crop_mult, lime_mult) %>%
+  group_by(crop, admin2_gadm,treatment, crop_mult, lime_mult) %>%
   summarise(
     pct_positive = mean(profit_y1 > 0, na.rm = TRUE) * 100,
     pct_positive_npv = mean(npv > 0, na.rm = TRUE) * 100,
     .groups = "drop"
-  )
+  )%>%
+  mutate(facet_label = paste0(admin2_gadm, " | ", crop))
 
 #  Heatmap faceted by crop (profit)
 ggplot(sens_summary_crop, aes(x = crop_mult, y = lime_mult, fill = pct_positive)) +
   geom_tile(color = "grey90") +
   # geom_text(aes(label = sprintf("%.0f%%", pct_positive)), color = "white", size = 3) +
-  facet_wrap(admin2_gadm ~ crop, ncol = 4) +
+  facet_wrap(~facet_label, ncol = 4) +
   scale_fill_viridis_c(name = "% fields profitable", option = "C", limits = c(0, 100)) +
   labs(
     title = "Sensitivity of Profitability to Crop–Lime Price Ratios (Year 1)",
@@ -331,7 +336,7 @@ ggplot(sens_summary_crop, aes(x = crop_mult, y = lime_mult, fill = pct_positive)
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
     strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text = element_text(color = "white", face = "bold", family = my_font_2),
+    strip.text.x  = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
     legend.position = c(0.8, 0.15),
     plot.title = element_text(face = "plain")
   )
@@ -347,7 +352,7 @@ ggsave(
 ggplot(sens_summary_crop, aes(x = crop_mult, y = lime_mult, fill = pct_positive_npv)) +
   geom_tile(color = "grey90") +
   # geom_text(aes(label = sprintf("%.0f%%", pct_positive_npv)), color = "white", size = 3) +
-  facet_wrap(admin2_gadm ~ crop, ncol = 4) +
+  facet_wrap(~facet_label, ncol = 4) +
   scale_fill_viridis_c(name = "% fields NPV>0", option = "C", limits = c(0, 100)) +
   labs(
     title = "Sensitivity of NPV Profitability to Crop–Lime Price Ratios",
@@ -358,7 +363,7 @@ ggplot(sens_summary_crop, aes(x = crop_mult, y = lime_mult, fill = pct_positive_
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
     strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text = element_text(color = "white", face = "bold", family = my_font_2),
+    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
     legend.position = c(0.8, 0.15),
     plot.title = element_text(face = "plain")
   )
@@ -368,6 +373,125 @@ ggsave(
   filename = file.path(output_dir, "sensitivity_npv_profitability_heatmap_by_crop_site.png"),
   width = 10,
   height = 14,
+  dpi = 600
+)
+
+
+# only maize for simplicity
+sensitivity_df_maize <- sens_summary_crop %>%
+  filter(tolower(crop) == "maize") |>
+  mutate(facet_label_2 = paste0(admin2_gadm, " | ", treatment))
+
+ggplot(sensitivity_df_maize, aes(x = crop_mult, y = lime_mult, fill = pct_positive_npv)) +
+  geom_tile(color = "grey90") +
+  # geom_text(aes(label = sprintf("%.0f%%", pct_positive_npv)), color = "white", size = 3) +
+  facet_wrap(~facet_label_2, ncol = 3) +
+  scale_fill_viridis_c(name = "% fields NPV>0", option = "C", limits = c(0, 100)) +
+  labs(
+    title = "Sensitivity of NPV Profitability to Crop–Lime Price Ratios (Maize)",
+    subtitle = "Each panel shows % of fields with positive NPV under each price scenario",
+    x = "Crop price multiplier",
+    y = "Lime price multiplier"
+  ) +
+  ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
+  theme(
+    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
+    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
+    legend.position = "bottom",
+    plot.title = element_text(face = "plain")
+  )
+
+
+ggsave(
+  filename = file.path(output_dir, "sensitivity_npv_profitability_heatmap_maize.png"),
+  width = 10,
+  height = 18,
+  dpi = 600
+)
+
+# first year profit only
+
+ggplot(sensitivity_df_maize, aes(x = crop_mult, y = lime_mult, fill = pct_positive)) +
+  geom_tile(color = "grey90") +
+  # geom_text(aes(label = sprintf("%.0f%%", pct_positive)), color = "white", size = 3) +
+  facet_wrap(~facet_label_2, ncol = 3) +
+  scale_fill_viridis_c(name = "% fields profitable", option = "C", limits = c(0, 100)) +
+  labs(
+    title = "Sensitivity of Profitability (First-year) to Crop–Lime Price Ratios (Maize, Year 1)",
+    subtitle = "Each panel shows % of fields with positive profit under each price scenario",
+    x = "Crop price multiplier",
+    y = "Lime price multiplier"
+  ) +
+  ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
+  theme(
+    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
+    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
+    legend.position = "bottom",
+    plot.title = element_text(face = "plain")
+  )
+
+ggsave(
+  filename = file.path(output_dir, "sensitivity_profitability_heatmap_maize_year1.png"),
+  width = 10,
+  height = 18,
+  dpi = 600
+)
+
+# only beans for simplicity
+sensitivity_df_beans <- sens_summary_crop %>%
+  filter(tolower(crop) == "beans") |>
+  mutate(facet_label_2 = paste0(admin2_gadm, " | ", treatment))
+
+ggplot(sensitivity_df_beans, aes(x = crop_mult, y = lime_mult, fill = pct_positive_npv)) +
+  geom_tile(color = "grey90") +
+  # geom_text(aes(label = sprintf("%.0f%%", pct_positive_npv)),
+  #           color = "white", size = 3) +
+  facet_wrap(~facet_label_2, ncol = 3) +
+  scale_fill_viridis_c(name = "% fields NPV>0", option = "C", limits = c(0, 100)) +
+  labs(
+    title = "Sensitivity of NPV Profitability to Crop–Lime Price Ratios (Beans)",
+    subtitle = "Each panel shows % of fields with positive NPV under each price scenario",
+    x = "Crop price multiplier",
+    y = "Lime price multiplier"
+  ) +
+  ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
+  theme(
+    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
+    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
+    legend.position = "bottom",
+    plot.title = element_text(face = "plain")
+  )
+
+ggsave(
+  filename = file.path(output_dir, "sensitivity_npv_profitability_heatmap_beans.png"),
+  width = 10,
+  height = 18,
+  dpi = 600
+)
+
+ggplot(sensitivity_df_beans, aes(x = crop_mult, y = lime_mult, fill = pct_positive)) +
+  geom_tile(color = "grey90") +
+  # geom_text(aes(label = sprintf("%.0f%%", pct_positive)), color = "white", size = 3) +
+  facet_wrap(~facet_label_2, ncol = 3) +
+  scale_fill_viridis_c(name = "% fields profitable", option = "C", limits = c(0, 100)) +
+  labs(
+    title = "Sensitivity of Profitability (First-year) to Crop–Lime Price Ratios (Beans, Year 1)",
+    subtitle = "Each panel shows % of fields with positive profit under each price scenario",
+    x = "Crop price multiplier",
+    y = "Lime price multiplier"
+  ) +
+  ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
+  theme(
+    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
+    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
+    legend.position = "bottom",
+    plot.title = element_text(face = "plain")
+  )
+
+ggsave(
+  filename = file.path(output_dir, "sensitivity_profitability_heatmap_beans_year1.png"),
+  width = 10,
+  height = 18,
   dpi = 600
 )
 
@@ -382,7 +506,8 @@ ratio_df <- sensitivity_df %>%
     pct_positive_npv = mean(npv > 0, na.rm = TRUE) * 100,
     pct_positive = mean(profit_y1 > 0, na.rm = TRUE) * 100,
     .groups = "drop"
-  )
+  ) |>
+  mutate(facet_label_3 = paste0(admin2_gadm, " | ", crop))
 
 baseline_ratio_df <- sensitivity_df %>%
   filter(lime_mult == 1, crop_mult == 1) %>%
@@ -398,7 +523,8 @@ baseline_points <- sensitivity_df %>%
     pct_positive = mean(profit_y1 > 0, na.rm = TRUE) * 100,
     pct_positive_npv = mean(npv > 0, na.rm = TRUE) * 100,
     .groups = "drop"
-  )
+  )|>
+  mutate(facet_label_3 = paste0(admin2_gadm, " | ", crop))
 
 ggplot(ratio_df, aes(x = price_ratio, y = pct_positive, color = treatment)) +
   # geom_line(size = 1.1) +
@@ -413,7 +539,7 @@ ggplot(ratio_df, aes(x = price_ratio, y = pct_positive, color = treatment)) +
   ) +
   scale_x_continuous(labels = scales::number_format(accuracy = 0.01)) +
   scale_color_manual(values = bar_colors) +
-  facet_wrap(admin2_gadm ~ crop, scale = "free") +
+  facet_wrap(~facet_label_3, scale = "free") +
   labs(
     title = "Smoothed Profitability Threshold by Lime–Crop Price Ratio",
     subtitle = "Share of fields with positive First-Year Profit (Point = baseline prices)",
@@ -423,7 +549,7 @@ ggplot(ratio_df, aes(x = price_ratio, y = pct_positive, color = treatment)) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
     strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text = element_text(color = "white", family = my_font_2),
+    strip.text.x  = element_text(color = "#0E3065", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = c(0.85, 0.05),
     plot.title = element_text(face = "plain")
@@ -451,7 +577,7 @@ ggplot(ratio_df, aes(x = price_ratio, y = pct_positive_npv, color = treatment)) 
   scale_x_continuous(labels = number_format(accuracy = 0.1)) +
   scale_y_continuous(labels = percent_format(scale = 1)) +
   scale_color_manual(values = bar_colors) +
-  facet_wrap(admin2_gadm ~ crop, scale = "free") +
+  facet_wrap(~facet_label_3, scale = "free") +
   labs(
     title = "Smoothed Probability of Profitability by Lime–Crop Price Ratio",
     subtitle = "Share of fields with positive NPV (4 years, 25 % benefit decay)(Point = baseline prices)",
@@ -462,7 +588,7 @@ ggplot(ratio_df, aes(x = price_ratio, y = pct_positive_npv, color = treatment)) 
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
     strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text = element_text(color = "white", family = my_font_2),
+    strip.text.x  = element_text(color = "#0E3065", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = c(0.85, 0.05),
     plot.title = element_text(face = "plain")
@@ -479,10 +605,11 @@ df_field %>%
   group_by(crop, admin2_gadm, treatment) %>%
   arrange(profit_y1) %>%
   mutate(cumshare = row_number() / n()) %>%
+  mutate(facet_label = paste0(admin2_gadm, " | ", crop)) %>%
   ggplot(aes(x = profit_y1, y = cumshare, color = treatment)) +
   geom_line(size = 0.6) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "#490000") +
-  facet_wrap(admin2_gadm ~ crop) +
+  facet_wrap(~ facet_label) +
   scale_color_manual(values = bar_colors) +
   labs(
     x = "Profit (USD/ha)", y = "Cumulative Share of Fields",
@@ -491,7 +618,7 @@ df_field %>%
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
     strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text = element_text(color = "white", family = my_font_2),
+    strip.text.x  = element_text(color = "#0E3065", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = c(0.85, 0.05),
     plot.title = element_text(face = "plain")
@@ -508,10 +635,11 @@ df_field %>%
   group_by(crop, admin2_gadm, treatment) %>%
   arrange(npv) %>%
   mutate(cumshare = row_number() / n()) %>%
+  mutate(facet_label = paste0(admin2_gadm, " | ", crop)) %>%
   ggplot(aes(x = npv, y = cumshare, color = treatment)) +
   geom_line(size = 0.6) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "#490000") +
-  facet_wrap(admin2_gadm ~ crop) +
+  facet_wrap(~ facet_label) +
   scale_color_manual(values = bar_colors) +
   labs(
     x = "NPV (USD/ha)", y = "Cumulative Share of Fields",
@@ -520,7 +648,7 @@ df_field %>%
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
     strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text = element_text(color = "white", family = my_font_2),
+    strip.text.x  = element_text(color = "#0E3065", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = c(0.85, 0.05),
     plot.title = element_text(face = "plain")
@@ -532,11 +660,12 @@ ggsave(
   height = 16,
   dpi = 600
 )
-
-ggplot(df_field, aes(x = ex_ac_BP, y = npv, color = treatment)) +
+df_field|>
+  mutate(facet_label = paste0(admin2_gadm, " | ", crop)) |>
+ggplot(aes(x = ex_ac_BP, y = npv, color = treatment)) +
   geom_point(alpha = 0.2) +
   geom_smooth(method = "loess", span = 0.5, linewidth = 0.5) +
-  facet_wrap(admin2_gadm ~ crop, scale = "free") +
+  facet_wrap( ~ facet_label, scale = "free") +
   labs(
     title = "NPV vs Exchangable acidity",
     x = "Exchangable Acidity (cmol/kg)",
@@ -547,7 +676,7 @@ ggplot(df_field, aes(x = ex_ac_BP, y = npv, color = treatment)) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
     strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text = element_text(color = "white", family = my_font_2),
+    strip.text.x  = element_text(color = "#0E3065", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = c(0.85, 0.05),
     plot.title = element_text(face = "plain")
@@ -560,11 +689,13 @@ ggsave(
 )
 
 # ph vs profit
-ggplot(df_field, aes(x = p_h_BP, y = npv, color = treatment)) +
+df_field|>
+  mutate(facet_label = paste0(admin2_gadm, " | ", crop)) |>
+ggplot(aes(x = p_h_BP, y = npv, color = treatment)) +
   geom_point(alpha = 0.2) +
   geom_smooth(method = "loess", span = 0.5, linewidth = 0.6) +
-  facet_wrap(admin2_gadm ~ crop, scale = "free") +
-  labs(
+  facet_wrap( ~ facet_label, scale = "free") +
+    labs(
     title = "NPV vs Soil pH",
     x = "Soil pH",
     y = "NPV (USD/ha)"
@@ -574,7 +705,7 @@ ggplot(df_field, aes(x = p_h_BP, y = npv, color = treatment)) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
     strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text = element_text(color = "white", family = my_font_2),
+    strip.text.x  = element_text(color = "#0E3065", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = c(0.85, 0.05),
     plot.title = element_text(face = "plain")
