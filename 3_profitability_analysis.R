@@ -1,17 +1,21 @@
 # =========================================================
-# Liming Profitability
+# Liming Profitability in Tanzania, Rwanda, and Ethiopia
 # =========================================================
 # Author: Bisrat H
 # date: 28/09/2025
 # What it does:
-# - Reads raw trial data + baseline price tables (mainly assumptions)
+# - Reads raw trial data + baseline price tables (mainly assumptions, will update with WFP prices)
 # - Computes per-field yield response (vs T1 control) per site × crop
-# - Additional revenue, total lime cost, profit gain (field & rollups)
-# - NPV with 25%/yr benefit decay over 4 years
+# - Additional revenue, total lime cost, profit gain at field
+# - NPV with 25%/yr benefit decay over 4 years and 10% discount rate
 # - Sensitivity of profit to crop & lime prices
-# Outputs written to "outputs/" as CSVs
+# Outputs written to "outputs/" as CSVs and PNGs
 # =========================================================
 
+
+# ─────────────────────────────────────────────────────────────
+# 0. Load Packages
+# ─────────────────────────────────────────────────────────────
 if (!requireNamespace("pacman", quietly = TRUE)) {
   install.packages("pacman")
 }
@@ -44,9 +48,9 @@ bar_colors <- c(
   "#8F2D56"
 )
 
-# -----------------------------
-# Paths (edit if needed)
-# -----------------------------
+# ─────────────────────────────────────────────────────────────
+# 1. Paths and Parameters
+# ─────────────────────────────────────────────────────────────
 raw_data_path <- "tmp/data_y1.dta" # raw, observational data
 base_crop_price_path <- "tmp/base_crop_prices.csv" # cols: country,admin2_gadm,crop,crop_price_base
 base_lime_price_path <- "tmp/base_lime_price.csv" # cols: country,lime_price_base
@@ -54,9 +58,6 @@ output_dir <- "outputs/profitability_analysis" # output directory
 
 dir_create(output_dir)
 
-# -----------------------------
-# Tunable parameters
-# -----------------------------
 default_crop_price <- 160 # USD/t if baseline file row missing
 default_lime_price <- 55 # USD/t if baseline file row missing
 
@@ -68,9 +69,9 @@ time_horizon_years <- 4 # 4 years
 crop_multipliers <- seq(0.6, 1.8, by = 0.1) # 60%..180% of baseline
 lime_multipliers <- seq(0.6, 1.8, by = 0.1)
 
-# -----------------------------
-# Helper functions
-# -----------------------------
+# ─────────────────────────────────────────────────────────────
+# 2. Helper Functions
+# ─────────────────────────────────────────────────────────────
 safe_read_csv <- function(path) {
   if (file.exists(path)) {
     readr::read_csv(path, show_col_types = FALSE)
@@ -89,7 +90,7 @@ pv_factor <- function(T, r, decay = 0) {
 }
 
 # Compute field-level yield response vs control (T1) within each country/site/field/crop
-# For a field with multiple treatment rows including T1 (lime_tha=0 often), we set:
+
 #   yield_response = yield_tha - mean(yield_tha of T1 in that field)
 compute_yield_response <- function(df_raw) {
   df_raw |>
@@ -101,9 +102,9 @@ compute_yield_response <- function(df_raw) {
     ungroup()
 }
 
-# -----------------------------
-# Load data
-# -----------------------------
+# ─────────────────────────────────────────────────────────────
+# 3. Load and Prepare Data
+# ─────────────────────────────────────────────────────────────
 df_raw <- haven::as_factor(haven::read_dta(raw_data_path), only_labelled = T) |>
   select(
     country,
@@ -141,13 +142,11 @@ df_raw <- haven::as_factor(haven::read_dta(raw_data_path), only_labelled = T) |>
 base_crop_prices <- safe_read_csv(base_crop_price_path)
 base_lime_price <- safe_read_csv(base_lime_price_path)
 
-# -----------------------------
-# Prepare responses & prices
-# -----------------------------
-df_resp <- compute_yield_response(df_raw)
 
-# drop the T1 row for the response reporting (its response is 0 by definition),
-# but keep it if you want to explicitly see zeros—here we remove T1 for profit calc
+# ─────────────────────────────────────────────────────────────
+# 4. Profit and NPV Computation
+# ─────────────────────────────────────────────────────────────
+df_resp <- compute_yield_response(df_raw)
 df_resp_nz <- df_resp |> filter(treatment != "T1")
 
 # Attach baseline crop price (by country, site, crop) and lime price (by country)
@@ -159,9 +158,6 @@ df_resp_pr <- df_resp_nz |>
     lime_price_base = ifelse(is.na(lime_price_base), default_lime_price, lime_price_base)
   )
 
-# -----------------------------
-# Profit & NPV calculations
-# -----------------------------
 disc_factor <- pv_factor(time_horizon_years, discount_rate, benefit_decay)
 
 df_field <- df_resp_pr |>
@@ -187,11 +183,11 @@ df_field <- df_resp_pr |>
   )
 
 # ----------------------------------------------
-# 1. Boxplot of Profit by Site (facet by Crop)
+# 4.1. Boxplot of Profit by Site (facet by Crop)
 # ----------------------------------------------
 df_field |>
   mutate(facet_label = paste0(admin2_gadm, " | ", crop)) |>
-ggplot(aes(x = treatment, y = profit_y1, fill = treatment)) +
+  ggplot(aes(x = treatment, y = profit_y1, fill = treatment)) +
   geom_boxplot(
     alpha = 0.9,
     width = 0.5,
@@ -201,7 +197,7 @@ ggplot(aes(x = treatment, y = profit_y1, fill = treatment)) +
     color = "#0E3065",
     linewidth = 0.2
   ) +
-  facet_wrap( ~ facet_label, scales = "free_y") +
+  facet_wrap(~facet_label, scales = "free_y") +
   scale_y_continuous(labels = dollar_format()) +
   scale_fill_manual(values = bar_colors) +
   labs(
@@ -211,22 +207,23 @@ ggplot(aes(x = treatment, y = profit_y1, fill = treatment)) +
   ) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = "none",
-    plot.title = element_text(face = "plain")
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
 
-ggsave(file.path(output_dir, "box_profit_by_site_crop.png"), width = 12, height = 16, dpi = 400)
+ggsave(file.path(output_dir, "box_profit_by_site_crop.png"), width = 14, height = 14, dpi = 400)
 
 
 # ----------------------------------------------
-# 2. Boxplot of NPV by Site (facet by Crop)
+# 4.2. Boxplot of NPV by Site (facet by Crop)
 # ----------------------------------------------
 df_field |>
   mutate(facet_label = paste0(admin2_gadm, " | ", crop)) |>
-ggplot(aes(x = treatment, y = npv, fill = treatment)) +
+  ggplot(aes(x = treatment, y = npv, fill = treatment)) +
   geom_boxplot(
     alpha = 0.9,
     width = 0.5,
@@ -236,7 +233,7 @@ ggplot(aes(x = treatment, y = npv, fill = treatment)) +
     color = "#0E3065",
     linewidth = 0.2
   ) +
-  facet_wrap( ~ facet_label, scales = "free_y") +
+  facet_wrap(~facet_label, scales = "free_y") +
   scale_y_continuous(labels = dollar_format()) +
   scale_fill_manual(values = bar_colors) +
   labs(
@@ -247,18 +244,20 @@ ggplot(aes(x = treatment, y = npv, fill = treatment)) +
   ) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = "none",
-    plot.title = element_text(face = "plain")
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
+
 
 ggsave(file.path(output_dir, "box_npv_by_site_crop.png"), width = 12, height = 16, dpi = 600)
 
 
 # -----------------------------
-# Sensitivity analysis (profit & NPV) vs price multipliers
+# 5. Sensitivity analysis (profit & NPV) vs price multipliers
 # -----------------------------
 # For each site×crop×field row, recompute profit_y1 & NPV across a grid of
 # (crop_price_base * crop_mult, lime_price_base * lime_mult), then average.
@@ -308,17 +307,17 @@ sens_overall <- sensitivity_df |>
 
 
 # ----------------------------------------------
-# 3. Sensitivity: % of fields with positive profit
+# 6.1. Sensitivity: % of fields with positive profit
 # ----------------------------------------------
 
 #  Summarize probability of profit > 0 by crop
 sens_summary_crop <- sensitivity_df %>%
-  group_by(crop, admin2_gadm,treatment, crop_mult, lime_mult) %>%
+  group_by(crop, admin2_gadm, treatment, crop_mult, lime_mult) %>%
   summarise(
     pct_positive = mean(profit_y1 > 0, na.rm = TRUE) * 100,
     pct_positive_npv = mean(npv > 0, na.rm = TRUE) * 100,
     .groups = "drop"
-  )%>%
+  ) %>%
   mutate(facet_label = paste0(admin2_gadm, " | ", crop))
 
 #  Heatmap faceted by crop (profit)
@@ -335,11 +334,14 @@ ggplot(sens_summary_crop, aes(x = crop_mult, y = lime_mult, fill = pct_positive)
   ) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x  = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
+    panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = c(0.8, 0.15),
-    plot.title = element_text(face = "plain")
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
+
 
 ggsave(
   filename = file.path(output_dir, "sensitivity_profitability_heatmap_by_crop_site.png"),
@@ -362,10 +364,12 @@ ggplot(sens_summary_crop, aes(x = crop_mult, y = lime_mult, fill = pct_positive_
   ) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
+    panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = c(0.8, 0.15),
-    plot.title = element_text(face = "plain")
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
 
 
@@ -395,10 +399,12 @@ ggplot(sensitivity_df_maize, aes(x = crop_mult, y = lime_mult, fill = pct_positi
   ) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
+    panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = "bottom",
-    plot.title = element_text(face = "plain")
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
 
 
@@ -424,11 +430,14 @@ ggplot(sensitivity_df_maize, aes(x = crop_mult, y = lime_mult, fill = pct_positi
   ) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
+    panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = "bottom",
-    plot.title = element_text(face = "plain")
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
+
 
 ggsave(
   filename = file.path(output_dir, "sensitivity_profitability_heatmap_maize_year1.png"),
@@ -456,11 +465,14 @@ ggplot(sensitivity_df_beans, aes(x = crop_mult, y = lime_mult, fill = pct_positi
   ) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
+    panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = "bottom",
-    plot.title = element_text(face = "plain")
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
+
 
 ggsave(
   filename = file.path(output_dir, "sensitivity_npv_profitability_heatmap_beans.png"),
@@ -482,11 +494,14 @@ ggplot(sensitivity_df_beans, aes(x = crop_mult, y = lime_mult, fill = pct_positi
   ) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x = element_text(color = "#0E3065", face = "bold", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
+    panel.grid = element_line(color = "grey90", linewidth = 0.2),
     legend.position = "bottom",
-    plot.title = element_text(face = "plain")
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
+
 
 ggsave(
   filename = file.path(output_dir, "sensitivity_profitability_heatmap_beans_year1.png"),
@@ -496,7 +511,7 @@ ggsave(
 )
 
 # ----------------------------------------------
-# 4. Sensitivity: Profitability vs Lime/Crop Price Ratio
+# 6.2. Sensitivity: Profitability vs Lime/Crop Price Ratio
 # ----------------------------------------------
 
 ratio_df <- sensitivity_df %>%
@@ -523,7 +538,7 @@ baseline_points <- sensitivity_df %>%
     pct_positive = mean(profit_y1 > 0, na.rm = TRUE) * 100,
     pct_positive_npv = mean(npv > 0, na.rm = TRUE) * 100,
     .groups = "drop"
-  )|>
+  ) |>
   mutate(facet_label_3 = paste0(admin2_gadm, " | ", crop))
 
 ggplot(ratio_df, aes(x = price_ratio, y = pct_positive, color = treatment)) +
@@ -548,12 +563,14 @@ ggplot(ratio_df, aes(x = price_ratio, y = pct_positive, color = treatment)) +
   ) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x  = element_text(color = "#0E3065", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
-    legend.position = c(0.85, 0.05),
-    plot.title = element_text(face = "plain")
+    legend.position = c(0.8, 0.15),
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
+
 
 ggsave(
   filename = file.path(output_dir, "sensitivity_profitability_vs_price_ratio.png"),
@@ -587,11 +604,12 @@ ggplot(ratio_df, aes(x = price_ratio, y = pct_positive_npv, color = treatment)) 
   ) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x  = element_text(color = "#0E3065", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
-    legend.position = c(0.85, 0.05),
-    plot.title = element_text(face = "plain")
+    legend.position = c(0.8, 0.15),
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
 
 ggsave(
@@ -609,7 +627,7 @@ df_field %>%
   ggplot(aes(x = profit_y1, y = cumshare, color = treatment)) +
   geom_line(size = 0.6) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "#490000") +
-  facet_wrap(~ facet_label) +
+  facet_wrap(~facet_label) +
   scale_color_manual(values = bar_colors) +
   labs(
     x = "Profit (USD/ha)", y = "Cumulative Share of Fields",
@@ -617,12 +635,14 @@ df_field %>%
   ) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x  = element_text(color = "#0E3065", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
-    legend.position = c(0.85, 0.05),
-    plot.title = element_text(face = "plain")
+    legend.position = c(0.8, 0.05),
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
+
 
 ggsave(
   filename = file.path(output_dir, "cumulative_profitability_curve.png"),
@@ -639,7 +659,7 @@ df_field %>%
   ggplot(aes(x = npv, y = cumshare, color = treatment)) +
   geom_line(size = 0.6) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "#490000") +
-  facet_wrap(~ facet_label) +
+  facet_wrap(~facet_label) +
   scale_color_manual(values = bar_colors) +
   labs(
     x = "NPV (USD/ha)", y = "Cumulative Share of Fields",
@@ -647,12 +667,14 @@ df_field %>%
   ) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x  = element_text(color = "#0E3065", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
-    legend.position = c(0.85, 0.05),
-    plot.title = element_text(face = "plain")
+    legend.position = c(0.8, 0.05),
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
+
 
 ggsave(
   filename = file.path(output_dir, "cumulative_npv_profitability_curve.png"),
@@ -660,12 +682,12 @@ ggsave(
   height = 16,
   dpi = 600
 )
-df_field|>
+df_field |>
   mutate(facet_label = paste0(admin2_gadm, " | ", crop)) |>
-ggplot(aes(x = ex_ac_BP, y = npv, color = treatment)) +
+  ggplot(aes(x = ex_ac_BP, y = npv, color = treatment)) +
   geom_point(alpha = 0.2) +
   geom_smooth(method = "loess", span = 0.5, linewidth = 0.5) +
-  facet_wrap( ~ facet_label, scale = "free") +
+  facet_wrap(~facet_label, scale = "free") +
   labs(
     title = "NPV vs Exchangable acidity",
     x = "Exchangable Acidity (cmol/kg)",
@@ -675,12 +697,14 @@ ggplot(aes(x = ex_ac_BP, y = npv, color = treatment)) +
   scale_y_continuous(labels = dollar_format()) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x  = element_text(color = "#0E3065", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
-    legend.position = c(0.85, 0.05),
-    plot.title = element_text(face = "plain")
+    legend.position = c(0.8, 0.1),
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
+
 ggsave(
   filename = file.path(output_dir, "profit_vs_ex_acidity.png"),
   width = 10,
@@ -689,13 +713,13 @@ ggsave(
 )
 
 # ph vs profit
-df_field|>
+df_field |>
   mutate(facet_label = paste0(admin2_gadm, " | ", crop)) |>
-ggplot(aes(x = p_h_BP, y = npv, color = treatment)) +
+  ggplot(aes(x = p_h_BP, y = npv, color = treatment)) +
   geom_point(alpha = 0.2) +
   geom_smooth(method = "loess", span = 0.5, linewidth = 0.6) +
-  facet_wrap( ~ facet_label, scale = "free") +
-    labs(
+  facet_wrap(~facet_label, scale = "free") +
+  labs(
     title = "NPV vs Soil pH",
     x = "Soil pH",
     y = "NPV (USD/ha)"
@@ -704,12 +728,14 @@ ggplot(aes(x = p_h_BP, y = npv, color = treatment)) +
   scale_y_continuous(labels = dollar_format()) +
   ggthemes::theme_pander(base_size = 14, base_family = my_font_2) +
   theme(
-    strip.background = element_rect(fill = "#d0e2f0", color = "white"),
-    strip.text.x  = element_text(color = "#0E3065", family = my_font_2, size = 12),
+    strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+    strip.text.x = element_text(color = "#0E3065", face = "plain", family = my_font_2, size = 12),
     panel.grid = element_line(color = "grey90", linewidth = 0.2),
-    legend.position = c(0.85, 0.05),
-    plot.title = element_text(face = "plain")
+    legend.position = c(0.8, 0.08),
+    plot.title = element_text(face = "plain"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   )
+
 ggsave(
   filename = file.path(output_dir, "profit_vs_ph.png"),
   width = 10,
