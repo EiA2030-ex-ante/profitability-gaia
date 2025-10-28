@@ -42,11 +42,24 @@ bar_colors <- c(
   "#FFBE00",
   "#FC3400",
   "#00640D",
-  "#454283",
+  "#8F2D56",
   "#490000",
   "#4E5E77",
-  "#8F2D56"
+  
+  "#454283"
 )
+
+
+theme_bisrat <- function() {
+  ggthemes::theme_pander(base_size = 12, base_family = my_font_2) +
+    theme(
+      strip.background = element_rect(fill = "#d0e2f0", color = "black", linewidth = 0.5),
+      strip.text.x     = element_text(color = "#0E3065", family = my_font_2, size = 10),
+      panel.grid       = element_line(color = "grey90", linewidth = 0.2),
+      panel.border     = element_rect(color = "black", fill = NA, linewidth = 0.5),
+      plot.title       = element_text(face = "plain")
+    )
+}
 
 # ─────────────────────────────────────────────────────────────
 # 1. Paths and Parameters
@@ -66,8 +79,8 @@ benefit_decay <- 0.25 # 25%/year decay in yield benefit
 time_horizon_years <- 4 # 4 years
 
 # Sensitivity grid (multipliers on baseline prices)
-crop_multipliers <- seq(0.6, 1.8, by = 0.1) # 60%..180% of baseline
-lime_multipliers <- seq(0.6, 1.8, by = 0.1)
+crop_multipliers <- seq(0.8, 1.8, by = 0.1) # 60%..180% of baseline
+lime_multipliers <- seq(0.8, 1.8, by = 0.1)
 
 # ─────────────────────────────────────────────────────────────
 # 2. Helper Functions
@@ -120,7 +133,8 @@ df_raw <- haven::as_factor(haven::read_dta(raw_data_path), only_labelled = T) |>
     !is.na(country),
     !is.na(admin2_gadm),
     !is.na(crop),
-    !is.na(fid)
+    !is.na(fid),
+    !is.na(yield_tha)
   ) |>
   mutate(
     country     = as.character(country),
@@ -311,13 +325,13 @@ sens_overall <- sensitivity_df |>
 # ----------------------------------------------
 
 #  Summarize probability of profit > 0 by crop
-sens_summary_crop <- sensitivity_df %>%
-  group_by(crop, admin2_gadm, treatment, crop_mult, lime_mult) %>%
+sens_summary_crop <- sensitivity_df |>
+  group_by(crop, admin2_gadm, treatment, crop_mult, lime_mult) |>
   summarise(
     pct_positive = mean(profit_y1 > 0, na.rm = TRUE) * 100,
     pct_positive_npv = mean(npv > 0, na.rm = TRUE) * 100,
     .groups = "drop"
-  ) %>%
+  ) |>
   mutate(facet_label = paste0(admin2_gadm, " | ", crop))
 
 #  Heatmap faceted by crop (profit)
@@ -382,7 +396,7 @@ ggsave(
 
 
 # only maize for simplicity
-sensitivity_df_maize <- sens_summary_crop %>%
+sensitivity_df_maize <- sens_summary_crop |>
   filter(tolower(crop) == "maize") |>
   mutate(facet_label_2 = paste0(admin2_gadm, " | ", treatment))
 
@@ -447,7 +461,7 @@ ggsave(
 )
 
 # only beans for simplicity
-sensitivity_df_beans <- sens_summary_crop %>%
+sensitivity_df_beans <- sens_summary_crop |>
   filter(tolower(crop) == "beans") |>
   mutate(facet_label_2 = paste0(admin2_gadm, " | ", treatment))
 
@@ -514,9 +528,9 @@ ggsave(
 # 6.2. Sensitivity: Profitability vs Lime/Crop Price Ratio
 # ----------------------------------------------
 
-ratio_df <- sensitivity_df %>%
-  mutate(price_ratio = lime_price / crop_price) %>%
-  group_by(crop, treatment, admin2_gadm, price_ratio) %>%
+ratio_df <- sensitivity_df |>
+  mutate(price_ratio = lime_price / crop_price) |>
+  group_by(crop, treatment, admin2_gadm, price_ratio) |>
   summarise(
     pct_positive_npv = mean(npv > 0, na.rm = TRUE) * 100,
     pct_positive = mean(profit_y1 > 0, na.rm = TRUE) * 100,
@@ -524,15 +538,15 @@ ratio_df <- sensitivity_df %>%
   ) |>
   mutate(facet_label_3 = paste0(admin2_gadm, " | ", crop))
 
-baseline_ratio_df <- sensitivity_df %>%
-  filter(lime_mult == 1, crop_mult == 1) %>%
-  group_by(crop, admin2_gadm) %>%
+baseline_ratio_df <- sensitivity_df |>
+  filter(lime_mult == 1, crop_mult == 1) |>
+  group_by(crop, admin2_gadm) |>
   summarise(baseline_ratio = mean(lime_price / crop_price, na.rm = TRUE), .groups = "drop")
 
 
-baseline_points <- sensitivity_df %>%
-  filter(crop_mult == 1, lime_mult == 1) %>%
-  group_by(crop, treatment, admin2_gadm) %>%
+baseline_points <- sensitivity_df |>
+  filter(crop_mult == 1, lime_mult == 1) |>
+  group_by(crop, treatment, admin2_gadm) |>
   summarise(
     price_ratio = mean(lime_price / crop_price, na.rm = TRUE),
     pct_positive = mean(profit_y1 > 0, na.rm = TRUE) * 100,
@@ -619,13 +633,13 @@ ggsave(
   dpi = 600
 )
 
-df_field %>%
-  group_by(crop, admin2_gadm, treatment) %>%
-  arrange(profit_y1) %>%
-  mutate(cumshare = row_number() / n()) %>%
-  mutate(facet_label = paste0(admin2_gadm, " | ", crop)) %>%
+df_field |>
+  group_by(crop, admin2_gadm, treatment) |>
+  arrange(profit_y1) |>
+  mutate(cumshare = row_number() / n()) |>
+  mutate(facet_label = paste0(admin2_gadm, " | ", crop)) |>
   ggplot(aes(x = profit_y1, y = cumshare, color = treatment)) +
-  geom_line(size = 0.6) +
+  geom_line(linewidth = 0.6) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "#490000") +
   facet_wrap(~facet_label) +
   scale_color_manual(values = bar_colors) +
@@ -651,13 +665,13 @@ ggsave(
   dpi = 600
 )
 
-df_field %>%
-  group_by(crop, admin2_gadm, treatment) %>%
-  arrange(npv) %>%
-  mutate(cumshare = row_number() / n()) %>%
-  mutate(facet_label = paste0(admin2_gadm, " | ", crop)) %>%
+df_field |>
+  group_by(crop, admin2_gadm, treatment) |>
+  arrange(npv) |>
+  mutate(cumshare = row_number() / n()) |>
+  mutate(facet_label = paste0(admin2_gadm, " | ", crop)) |>
   ggplot(aes(x = npv, y = cumshare, color = treatment)) +
-  geom_line(size = 0.6) +
+  geom_line(linewidth = 0.6) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "#490000") +
   facet_wrap(~facet_label) +
   scale_color_manual(values = bar_colors) +
@@ -686,7 +700,7 @@ df_field |>
   mutate(facet_label = paste0(admin2_gadm, " | ", crop)) |>
   ggplot(aes(x = ex_ac_BP, y = npv, color = treatment)) +
   geom_point(alpha = 0.2) +
-  geom_smooth(method = "loess", span = 0.5, linewidth = 0.5) +
+  geom_smooth(method = "loess", span = 0.8, linewidth = 0.5) +
   facet_wrap(~facet_label, scale = "free") +
   labs(
     title = "NPV vs Exchangable acidity",
@@ -708,7 +722,7 @@ df_field |>
 ggsave(
   filename = file.path(output_dir, "profit_vs_ex_acidity.png"),
   width = 10,
-  height = 16,
+  height = 12,
   dpi = 600
 )
 
@@ -717,7 +731,7 @@ df_field |>
   mutate(facet_label = paste0(admin2_gadm, " | ", crop)) |>
   ggplot(aes(x = p_h_BP, y = npv, color = treatment)) +
   geom_point(alpha = 0.2) +
-  geom_smooth(method = "loess", span = 0.5, linewidth = 0.6) +
+  geom_smooth(method = "loess", span = 0.8, linewidth = 0.6) +
   facet_wrap(~facet_label, scale = "free") +
   labs(
     title = "NPV vs Soil pH",
@@ -752,3 +766,421 @@ write_csv(
   sensitivity_df,
   file.path(output_dir, "sensitivity_field_level.csv")
 )
+
+# ─────────────────────────────────────────────────────────────
+# 9. BREAK-EVEN ANALYSIS
+# ─────────────────────────────────────────────────────────────
+
+# -------------------------------------------------------------
+# (A) 1st-Year Baseline Profitability (Who breaks even now?)
+# -------------------------------------------------------------
+baseline_break_even <- df_field %>%
+  mutate(is_profitable = profit_y1 >= 0) %>%
+  group_by(country, admin2_gadm, crop, treatment) %>%
+  summarise(
+    n_fields = n(),
+    pct_profitable = mean(is_profitable, na.rm = TRUE) * 100,
+    mean_profit = mean(profit_y1, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(pct_profitable))
+
+# Save and print summary
+write_csv(baseline_break_even, file.path(output_dir, "break_even_baseline_summary.csv"))
+print(baseline_break_even, n = 20)
+
+
+# -------------------------------------------------------------
+# (B) Break-even Lime Price (Field-level threshold)
+# -------------------------------------------------------------
+break_even_field <- df_field %>%
+  mutate(
+    lime_price_break_even = ifelse(
+      lime_tha > 0,
+      (yield_response * crop_price_base) / lime_tha,
+      NA_real_
+    ),
+    break_even_gap = lime_price_base - lime_price_break_even
+  )
+
+# Summary: average threshold by site × crop
+break_even_summary <- break_even_field %>%
+  group_by(country, admin2_gadm, crop, treatment) %>%
+  summarise(
+    mean_break_even_price = mean(lime_price_break_even, na.rm = TRUE),
+    median_break_even_price = median(lime_price_break_even, na.rm = TRUE),
+    current_lime_price = mean(lime_price_base, na.rm = TRUE),
+    pct_profitable_now = mean(profit_y1 > 0, na.rm = TRUE) * 100,
+    .groups = "drop"
+  ) %>%
+  mutate(
+    lime_price_gap = current_lime_price - mean_break_even_price,
+    status = ifelse(lime_price_gap > 0, "Too Expensive", "Profitable")
+  )
+
+write_csv(break_even_summary, file.path(output_dir, "break_even_lime_price_summary.csv"))
+
+# -------------------------------------------------------------
+# (C) Visualization: Distribution of Break-even Lime Prices
+# -------------------------------------------------------------
+
+# if prices are negative (i.e., no lime needed), set to zero for visualization
+break_even_field <- break_even_field %>%
+  mutate(lime_price_break_even = pmax(lime_price_break_even, 0))|>
+  mutate(facet_label = paste0(admin2_gadm, " | ", crop))
+g1 <- ggplot(break_even_field, aes(x = lime_price_break_even, fill = treatment)) +
+  geom_histogram(bins = 20, alpha = 0.7, position = "identity") +
+  # i want to add density curves but not sure how to scale them properly
+  scale_fill_manual(values = bar_colors) +
+  scale_x_continuous(labels = dollar_format()) +
+  facet_wrap(~facet_label, scales = "free_y") +
+  labs(
+    title = "Distribution of Break-even Lime Prices per Field",
+    x = "Break-even Lime Price (USD/t)",
+    y = "Number of Fields"
+  ) +
+  theme_bisrat()
+g1
+ggsave(file.path(output_dir, "hist_break_even_lime_price.png"), g1, width = 10, height = 7, dpi = 500)
+
+
+# -------------------------------------------------------------
+# (D) Visualization: % of Fields Profitable vs Lime Price
+# -------------------------------------------------------------
+# Simulate how % profitable changes with different lime prices
+lime_price_seq <- seq(0, 200, by = 10)
+
+profit_vs_limeprice <- df_field %>%
+  select(country, admin2_gadm,treatment, crop, yield_response, lime_tha, crop_price_base) %>%
+  crossing(lime_price = lime_price_seq) %>%
+  mutate(
+    profit_y1 = (yield_response * crop_price_base) - (lime_tha * lime_price)
+  ) %>%
+  group_by(admin2_gadm, crop, treatment, lime_price) %>%
+  summarise(
+    pct_profitable = mean(profit_y1 >= 0, na.rm = TRUE) * 100,
+    .groups = "drop"
+  ) |>
+  mutate(facet_label = paste0(admin2_gadm, " | ", treatment))
+
+g2 <- ggplot(profit_vs_limeprice, aes(x = lime_price, y = pct_profitable, color = crop)) +
+  geom_line(linewidth = 0.9) +
+  facet_wrap(~facet_label, scales = "free_y", ncol=4) +
+  scale_color_manual(values = bar_colors) +
+  scale_x_continuous(labels = dollar_format()) +
+  labs(
+    title = "Share of Fields with Positive Profit vs Lime Price",
+    subtitle = "By Site × Crop — price thresholds for profitability",
+    x = "Lime Price (USD/t)",
+    y = "% of Fields Profitable"
+  ) +
+  theme_bisrat() +
+  theme(legend.position = "bottom")
+
+g2
+ggsave(file.path(output_dir, "profitability_vs_lime_price_curve.png"), g2, width = 10, height = 14, dpi = 500)
+
+
+# -------------------------------------------------------------
+# (E) Visualization: Site-level Comparison (Mean Break-even Price)
+# -------------------------------------------------------------
+g3 <- ggplot(break_even_summary, aes(x = reorder(admin2_gadm, mean_break_even_price),
+                                     y = mean_break_even_price, fill = crop)) +
+  geom_col(position = position_dodge()) +
+  scale_fill_manual(values = bar_colors) +
+  scale_y_continuous(labels = dollar_format()) +
+  facet_wrap(~treatment) +
+  coord_flip() +
+  labs(
+    title = "Average Break-even Lime Price by Site × Crop",
+    x = "Site (Admin2)",
+    y = "Mean Break-even Lime Price (USD/t)"
+  ) +
+  theme_bisrat()
+g3
+ggsave(file.path(output_dir, "break_even_lime_price_by_site_crop.png"), g3, width = 10, height = 8, dpi = 500)
+
+# Calculate percentage change in lime price needed for break-even
+break_even_summary <- break_even_summary %>%
+  mutate(
+    pct_change_needed = ((mean_break_even_price - current_lime_price) / current_lime_price) * 100,
+    label_text = sprintf("%.0f%%", pct_change_needed),
+    label_y = pct_change_needed / 2,                 # center of each bar
+    # tiny bars: nudge labels just outside so they don't vanish
+    label_y = ifelse(abs(pct_change_needed) < 3,
+                     ifelse(pct_change_needed >= 0, pct_change_needed + 2, pct_change_needed - 2),
+                     label_y),
+    is_small = abs(pct_change_needed) <=15
+  )
+
+# Plot
+g_pct <- ggplot(break_even_summary,
+                aes(x = reorder(admin2_gadm, pct_change_needed),
+                    y = pct_change_needed,
+                    fill = crop,
+                    group = crop)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  geom_hline(yintercept = 0, color = "black", linewidth = 0.3) +
+  # labels ON the bars (same dodge, y = midpoint)
+  geom_text(aes(y = label_y, label = label_text),
+            position = position_dodge(width = 0.7),
+            size = 2, family = my_font_2, fontface = "plain",
+            color = "black") +     # use black for readability across fills
+  scale_fill_manual(values = bar_colors) +
+  coord_flip(clip = "off") +
+  facet_wrap(~treatment) +
+  scale_y_continuous(labels = function(x) paste0(x, "%"),
+                     breaks = scales::pretty_breaks(n = 6),
+                     expand = expansion(mult = c(0.06, 0.10))) +
+  labs(
+    title = "Percentage Change in Lime Price Needed for Break-even",
+    subtitle = "Negative = price must drop; Positive = already below break-even",
+    x = "Site (Admin2)",
+    y = "Required Change in Lime Price (%)",
+    fill = "Crop"
+  ) +
+  theme_bisrat() +
+  theme(legend.position = "bottom",
+        axis.text.x = element_blank(),
+        strip.text = element_text(size = 12, color = "#0E3065"))
+
+
+g_pct
+ggsave(file.path(output_dir, "break_even_lime_price_pct_change_by_site_crop.png"),
+       g_pct, width = 10, height = 4, dpi = 500)
+
+
+# ─────────────────────────────────────────────────────────────
+# 11. PROFITABILITY QUANTILE THRESHOLDS (e.g. 50%, 80%)
+# ─────────────────────────────────────────────────────────────
+
+lime_price_seq <- seq(0, 200, by = 10)
+
+# 1️⃣ Profitability curve at each lime price
+profit_curve <- df_field %>%
+  select(country, admin2_gadm, crop, treatment,
+         yield_response, lime_tha, crop_price_base, lime_price_base) %>%
+  crossing(lime_price = lime_price_seq) %>%
+  mutate(
+    profit_y1 = (yield_response * crop_price_base) - (lime_tha * lime_price),
+    profitable = profit_y1 >= 0
+  ) %>%
+  group_by(country, admin2_gadm, crop, treatment, lime_price) %>%
+  summarise(
+    pct_profitable = mean(profitable, na.rm = TRUE) * 100,
+    current_lime_price = mean(lime_price_base, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# 2️⃣ Define profitability targets
+target_levels <- c(50, 60, 70, 80)
+
+safe_approx <- function(x, y, target, rule = 2) {
+  if (length(na.omit(x)) < 2 || length(na.omit(y)) < 2) return(NA_real_)
+  tryCatch(approx(x, y, xout = target, rule = rule)$y, error = function(e) NA_real_)
+}
+
+baseline_ratio_df <- df_field %>%
+  mutate(price_ratio_base = lime_price_base / crop_price_base) %>%
+  group_by(country, admin2_gadm, crop) %>%
+  summarise(
+    baseline_ratio = mean(price_ratio_base, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+threshold_quantiles <- profit_curve %>%
+  group_by(country, admin2_gadm, crop, treatment) %>%
+  summarise(
+    price_for_50pct = safe_approx(pct_profitable, lime_price, 50),
+    price_for_60pct = safe_approx(pct_profitable, lime_price, 60),
+    price_for_70pct = safe_approx(pct_profitable, lime_price, 70),
+    price_for_80pct = safe_approx(pct_profitable, lime_price, 80),
+    current_lime_price = mean(current_lime_price, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    price_change_50 = (price_for_50pct - current_lime_price) / current_lime_price * 100,
+    price_change_60 = (price_for_60pct - current_lime_price) / current_lime_price * 100,
+    price_change_70 = (price_for_70pct - current_lime_price) / current_lime_price * 100,
+    price_change_80 = (price_for_80pct - current_lime_price) / current_lime_price * 100
+  )
+
+plot_df <- profit_curve %>%
+  #mutate(price_ratio = lime_price / current_lime_price) %>%
+  left_join(threshold_quantiles, by = c("country", "admin2_gadm", "crop", "treatment")) %>%
+  left_join(baseline_ratio_df, by = c("country", "admin2_gadm", "crop")) |>
+  select(-current_lime_price.y) %>%
+  rename(current_lime_price = current_lime_price.x)
+
+ggplot(plot_df, aes(x = lime_price / current_lime_price, y = pct_profitable, color = crop)) +
+  geom_smooth(se = FALSE, linewidth = 1.2, span = 0.6) +
+  
+  # baseline price ratio (dotted black)
+  geom_vline(aes(xintercept = baseline_ratio),
+             color = "black", linetype = "dotted", linewidth = 0.8) +
+  
+  # thresholds (dashed lines)
+  geom_vline(aes(xintercept = price_for_50pct / current_lime_price), color = "#FF6666", linetype = "dashed") +
+  geom_vline(aes(xintercept = price_for_60pct / current_lime_price), color = "#FF9933", linetype = "dashed") +
+  geom_vline(aes(xintercept = price_for_70pct / current_lime_price), color = "#33CC33", linetype = "dashed") +
+  geom_vline(aes(xintercept = price_for_80pct / current_lime_price), color = "#3399FF", linetype = "dashed") +
+  
+  # text labels for thresholds
+  geom_text(
+    aes(x = price_for_50pct / current_lime_price, y = 5, label = "50%"),
+    color = "#FF6666", angle = 90, vjust = -0.5, size = 3
+  ) +
+  geom_text(
+    aes(x = price_for_60pct / current_lime_price, y = 5, label = "60%"),
+    color = "#FF9933", angle = 90, vjust = -0.5, size = 3
+  ) +
+  geom_text(
+    aes(x = price_for_70pct / current_lime_price, y = 5, label = "70%"),
+    color = "#33CC33", angle = 90, vjust = -0.5, size = 3
+  ) +
+  geom_text(
+    aes(x = price_for_80pct / current_lime_price, y = 5, label = "80%"),
+    color = "#3399FF", angle = 90, vjust = -0.5, size = 3
+  ) +
+  
+  facet_wrap(~ interaction(admin2_gadm, treatment, sep = " | "), ncol = 4) +
+  scale_y_continuous(labels = percent_format(scale = 1), limits = c(0, 100)) +
+  scale_color_manual(values = bar_colors) +
+  labs(
+    title = "Profitability Thresholds by Lime–Crop Price Ratio",
+    subtitle = "Smoothed curves showing % of fields with positive profit; dashed lines = 50–80% thresholds; dotted = current price ratio",
+    x = "Lime-to-Crop Price Ratio (relative to baseline)",
+    y = "% of fields with positive profit",
+    color = "Crop"
+  ) +
+  ggthemes::theme_pander(base_size = 14, base_family = "Frutiger") +
+  theme(
+    strip.background = element_rect(fill = "#1871B8", color = "white"),
+    strip.text = element_text(color = "white", face = "bold"),
+    panel.grid = element_line(color = "grey90", linewidth = 0.2),
+    legend.position = c(0.85, 0.05),
+    plot.title = element_text(face = "plain")
+  )
+
+
+
+
+
+
+
+
+
+# 3️⃣ For each site × crop × treatment, find price meeting each target
+threshold_quantiles <- profit_curve %>%
+  group_by(country, admin2_gadm, crop, treatment) %>%
+  summarise(
+    price_for_50pct = { tmp <- unique(cbind(pct_profitable, lime_price));
+    approx(tmp[,1], tmp[,2], xout = 50, rule = 2)$y },
+    price_for_60pct = { tmp <- unique(cbind(pct_profitable, lime_price));
+    approx(tmp[,1], tmp[,2], xout = 60, rule = 2)$y },
+    price_for_70pct = { tmp <- unique(cbind(pct_profitable, lime_price));
+    approx(tmp[,1], tmp[,2], xout = 70, rule = 2)$y },
+    price_for_80pct = { tmp <- unique(cbind(pct_profitable, lime_price));
+    approx(tmp[,1], tmp[,2], xout = 80, rule = 2)$y },
+    current_lime_price = mean(current_lime_price, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    price_change_50 = (price_for_50pct - current_lime_price) / current_lime_price * 100,
+    price_change_60 = (price_for_60pct - current_lime_price) / current_lime_price * 100,
+    price_change_70 = (price_for_70pct - current_lime_price) / current_lime_price * 100,
+    price_change_80 = (price_for_80pct - current_lime_price) / current_lime_price * 100
+  )
+write_csv(threshold_quantiles,
+          file.path(output_dir, "profitability_quantile_thresholds.csv"))
+
+# Make long-form dataset from threshold_quantiles
+threshold_long <- threshold_quantiles %>%
+  select(admin2_gadm, crop, treatment,
+         starts_with("price_change_")) %>%
+  pivot_longer(
+    cols = starts_with("price_change_"),
+    names_to = "target",
+    values_to = "pct_change"
+  ) %>%
+  mutate(
+    target = str_remove(target, "price_change_") %>% paste0("%"),
+    pct_change = round(pct_change, 1)
+  )|>
+  mutate(facet_label = paste0(admin2_gadm, " | ", treatment))
+
+# Vertical grouped bar chart
+g_q_bar <- ggplot(threshold_long,
+                  aes(x = target, y = pct_change, fill = crop)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  
+  # Add labels on top of bars
+  geom_text(aes(label = paste0(ifelse(pct_change > 0, "+", ""), pct_change, "%")),
+            position = position_dodge(width = 0.8),
+            vjust = ifelse(threshold_long$pct_change < 0, 1.2, -0.4),
+            size = 3.2, family = my_font_2) +
+  
+  facet_wrap(~facet_label, scales = "free_x", ncol=3) +
+  scale_fill_manual(values = bar_colors) +
+  geom_hline(yintercept = 0, color = "black", linewidth = 0.3) +
+  scale_y_continuous(labels = function(x) paste0(x, "%"),
+                     breaks = scales::pretty_breaks(n = 6),
+                     expand = expansion(mult = c(0.05, 0.1))) +
+  labs(
+    title = "Required Lime Price Change for Different Profitability Levels",
+    subtitle = "Negative = lime must become cheaper; Positive = already profitable",
+    x = "Target Share of Fields Profitable",
+    y = "Required Lime Price Change (%)",
+    fill = "Crop"
+  ) +
+  theme_bisrat() +
+  theme(
+    legend.position = "bottom",
+    strip.text = element_text(size = 12, color = "#0E3065")
+  )
+
+
+g_q_bar
+
+
+
+ggsave(file.path(output_dir, "profitability_threshold_curve_quantile.png"),
+       g_q_bar, width = 12, height = 20, dpi = 500)
+
+# Base plot
+g_arrow <- ggplot(threshold_long,
+                  aes(y = target, xend = pct_change, x = 0, color = crop)) +
+  # draw arrows from 0 to required % change
+  geom_segment(arrow = arrow(length = unit(0.18, "cm")),
+               linewidth = 1.1, show.legend = TRUE, position = position_dodge(width = 0.7)) +
+  
+  # label at end of arrow
+  geom_text(aes(x = pct_change, label = paste0(ifelse(pct_change > 0, "+", ""), pct_change, "%")),
+            position = position_dodge(width = 0.7),
+            vjust = 0.4,
+            size = 3.5,
+            family = my_font_2,
+            color = "black") +
+  
+  geom_vline(xintercept = 0, color = "black", linewidth = 0.3) +
+  scale_color_manual(values = bar_colors) +
+  facet_wrap(~facet_label, ncol = 3) +
+  scale_x_continuous(labels = function(x) paste0(x, "%"),
+                     breaks = scales::pretty_breaks(n = 6),
+                     expand = expansion(mult = c(0.1, 0.15))) +
+  labs(
+    title = "Required Lime Price Change for Different Profitability Levels",
+    subtitle = "Arrows point toward cheaper lime (negative = reduction needed)",
+    x = "Required Change in Lime Price (%)",
+    y = "Profitability Target (% of Fields Profitable)",
+    color = "Crop"
+  ) +
+  theme_bisrat() +
+  theme(
+    legend.position = "bottom",
+    strip.text = element_text(size = 12, color = "#0E3065"),
+    axis.text.y = element_text(size = 10),
+    panel.grid.major.y = element_blank(),
+    plot.margin = margin(10, 30, 10, 10)
+  )
+g_arrow
