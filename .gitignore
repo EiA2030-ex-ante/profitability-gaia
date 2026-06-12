@@ -2,3 +2,10 @@
 .Rhistory
 .RData
 .Ruserdata
+.DS_Store
+
+# Too large for GitHub (274 MB) — see README §3 for how to obtain
+analysis/data/raw/annual_Rainfall_1981_2024.tif
+
+# Manuscript drafts — kept local, not published
+analysis/paper/
